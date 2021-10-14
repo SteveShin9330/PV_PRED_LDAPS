@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
+import math
 
 import pandas as pd
 import numpy as np
-
+import requests
 from pvlib import irradiance
 from pvlib.location import Location
 
@@ -45,13 +46,16 @@ class BasePreprocessor(object):
         """
 
         if decomp_model not in self.__AVAILABLE_DECOMP_MODELS:
-            raise ValueError(
-                "currently, only {} is available decomposition models".format(
-                    self.__AVAILABLE_DECOMP_MODELS
+            if decomp_model:
+                raise ValueError(
+                    "currently, only {} is available decomposition models".format(
+                        self.__AVAILABLE_DECOMP_MODELS
+                    )
                 )
-            )
-
-        self._decomp_model = getattr(irradiance, decomp_model)
+        if decomp_model:
+            self._decomp_model = getattr(irradiance, decomp_model)
+        else:
+            self._decomp_model = None
 
     @staticmethod
     def uv_to_speed(wind_speed_u, wind_speed_v):
@@ -73,7 +77,7 @@ class BasePreprocessor(object):
         return wind_speed
 
     @staticmethod
-    def kelvin_to_celsius(temp_air):
+    def kelvin_to_celsius(temp):
         """kelvin_to_celsius
 
         Parameters
@@ -85,10 +89,9 @@ class BasePreprocessor(object):
         -------
         """
 
-        temp_air = temp_air - 273.15
-        temp_air.name = "temp_air"
+        temp = temp - 273.15
 
-        return temp_air
+        return temp
 
     @staticmethod
     def get_clearsky_index(ghi, cs_ghi, csi_min=0, csi_max=1.2, eps=1e-6):
@@ -117,7 +120,7 @@ class BasePreprocessor(object):
 
     # pvlib.forecast.py's default method is 'clearsky_scaling'
     @staticmethod
-    def decompose(ghi, solar_zenith, model):
+    def decompose(weather, model, **kwargs):
         """decompose
 
         Parameters
@@ -131,14 +134,25 @@ class BasePreprocessor(object):
         Returns
         -------
         """
+        if model:
+            dni = model(weather.ghi,
+                        weather.zenith,
+                        weather.index,
+                        weather.pressure.interpolate(),
+                        True,
+                        weather.temp_dew.interpolate(),
+                        **kwargs)
+            if "dni" in dni:
+                dni = dni["dni"]
+            dhi = weather.ghi - dni * np.cos(np.radians(weather.zenith))
+        else:
+            dhi = weather.dhi
+            dni = [(x - y)/np.cos(np.radians(z)) if z <= 87 else math.nan for x, y, z in zip(weather.ghi, dhi, weather.zenith)]
+            dni = np.clip(dni, 0, 2000)
 
-        dni = model(ghi, solar_zenith, ghi.index)
-        # NOTE: disc returns dataframe containg dni as a column value
-        if "dni" in dni:
-            dni = dni["dni"]
-        dhi = ghi - dni * np.cos(np.radians(solar_zenith))
 
-        irrads = pd.DataFrame({"ghi": ghi, "dni": dni, "dhi": dhi})
+
+        irrads = pd.DataFrame({"ghi": weather.ghi, "dni": dni, "dhi": dhi})
         # NOTE: set missing value as 0 only if ghi value is missed
         # this step is required since implementation of disc and dirint model
         # in pvlib automatically replaces nans to 0
@@ -227,20 +241,22 @@ class LDAPSPreprocessor(BasePreprocessor):
         """
 
         temp_air = self.kelvin_to_celsius(weather["temp_air"])
+        temp_dew = self.kelvin_to_celsius(weather["temp_dew"])
         wind_speed = self.uv_to_speed(weather["wind_speed_u"], weather["wind_speed_v"])
-        weather_preproc = pd.DataFrame({"temp_air": temp_air, "wind_speed": wind_speed})
 
+
+        weather_preproc = pd.DataFrame({"temp_air": temp_air,
+                                        "temp_dew": temp_dew,
+                                        "wind_speed": wind_speed,
+                                        "pressure": weather["pressure"],
+                                        "low_clouds": weather["low_clouds"],
+                                        "mid_clouds": weather["mid_clouds"],
+                                        "high_clouds": weather["high_clouds"],
+                                        "total_clouds": weather["total_clouds"]
+        })
         return weather_preproc
 
-    def __call__(
-        self,
-        latitude,
-        longitude,
-        altitude,
-        weather,
-        keep_solar_geometry=True,
-        unstable_to_nan=True,
-    ):
+    def __call__(self, latitude, longitude, weather, altitude=None, keep_solar_geometry=True, unstable_to_nan=True):
         """__call__
 
         Parameters
@@ -258,33 +274,42 @@ class LDAPSPreprocessor(BasePreprocessor):
         Returns
         -------
         """
+        if not altitude:
+            query = ('https://api.open-elevation.com/api/v1/lookup'
+                     f'?locations={latitude},{longitude}')
+            r = requests.get(query).json()  # json object, various ways you can extract value
+            # one approach is to use pandas json functionality:
+            altitude = pd.json_normalize(r, 'results')['elevation'].values[0]
+            print(f'altitude not specified, replaced with NASA SRTM 7.5" data: {altitude}m')
 
         self._check_sanity(weather)
 
         raw_data = weather.copy()
-        weather = weather.resample("1h").asfreq()
+        weather = weather.resample("T").asfreq()
+        weather[['ghi', 'dhi']] = weather[['ghi', 'dhi']].shift(-30)
 
         location = Location(
             latitude, longitude, altitude=altitude, tz=weather.index.tz.zone
         )
         solpos = location.get_solarposition(weather.index)
         weather = weather.join(solpos)
-
+        weather.loc[weather.elevation < 0, 'ghi'] = 0
         if self.clearsky_interpolate:
             cs_irrads = location.get_clearsky(weather.index, solar_position=solpos)
             cs_irrads.columns = [f"cs_{c}" for c in cs_irrads.columns]
             cs_irrads.index.name = "dt"
             weather = weather.join(cs_irrads)
-            csi = self.get_clearsky_index(weather.ghi, weather.cs_ghi)
-            weather["csi"] = csi
-            weather = weather.interpolate()
+            weather["csi"] = self.get_clearsky_index(weather.ghi, weather.cs_ghi)
+            weather["csi"] = weather["csi"].interpolate()
             weather["ghi"] = np.array(weather.cs_ghi) * np.array(weather.csi)
+
         else:
             weather = weather.interpolate()
 
         # TODO: remove run_dt
         # based on the number of missing points in raw weather data
-        irrads = self.decompose(weather["ghi"], weather["zenith"], self._decomp_model)
+        irrads = self.decompose(weather, self._decomp_model)
+
         weather_preproc = self.preprocess(weather)
         weather_preproc = weather_preproc.join(irrads)
         basic_feature_cols = weather_preproc.columns
@@ -292,6 +317,9 @@ class LDAPSPreprocessor(BasePreprocessor):
             weather_preproc = weather_preproc.join(solpos)
             if self.clearsky_interpolate:
                 weather_preproc = weather_preproc.join(cs_irrads)
+
+
+        # weather_preproc = weather_preproc.resample('h').asfreq()
 
         weather_preproc = self.flag_interp_stability(raw_data, weather_preproc)
         if unstable_to_nan:
@@ -308,18 +336,17 @@ if __name__ == "__main__":
     kst = pytz.timezone("Asia/Seoul")
     dt = datetime.datetime.now().replace(minute=0, second=0, microsecond=0)  # Change datetime you want
     start_dt = kst.localize(dt)  # Change datetime you want
-    end_dt = kst.localize(dt + datetime.timedelta(days=1))  # Change datetime you want
-    lat, lon = 37.123, 126.598
+    # end_dt = kst.localize(dt + datetime.timedelta(days=1))  # Change datetime you want
+    lat, lon = 37.4845, 127.0340
     # ins.latest_simulation(start_dt, end_dt, verbose=True)
     loader = LDAPSLoader()
-    # loader.collect_data(start_dt, end_dt)
+    # loader.collect_data(start_dt)
     data = loader(lat, lon, start_dt)
 
-    preproc_model = LDAPSPreprocessor(decomp_model="disc", clearsky_interpolate=True)
+    preproc_model = LDAPSPreprocessor(decomp_model=None, clearsky_interpolate=True)
     weather_preproc = preproc_model(
         lat,
         lon,
-        altitude=0,
         weather=data,
         keep_solar_geometry=True,
         unstable_to_nan=True,

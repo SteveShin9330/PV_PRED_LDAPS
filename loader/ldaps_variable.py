@@ -4,13 +4,17 @@ from collections import OrderedDict
 
 LDAPS_SOLAR_DEFAULT = {
     "TDSWS": 'ghi',
-    "SWDIR": 'swdir',
     "SWDIF": 'dhi',
-    "TMP": 'temp',
+    "TMP": 'temp_air',
     "UGRD": 'wind_speed_u',
     "VGRD": 'wind_speed_v',
-    "DPT": 'dewpoint',
-    "PRE": 'pressure'
+    "DPT": 'temp_dew',
+    "PRE": 'pressure',
+    "VLCDC": 'vlow_clouds',
+    "LCDC": 'low_clouds',
+    "MCDC": 'mid_clouds',
+    "HCDC": 'high_clouds',
+    "TCAM": 'total_clouds'
 }
 
 LDAPS_GRIB = OrderedDict(
@@ -19,11 +23,6 @@ LDAPS_GRIB = OrderedDict(
             "name": "Total Downward Sfc. SW Flux",
             "shortName": "tdsw",
             "typeOfLevel": "surface",
-        },
-        "SWDIR": {
-            "name": "Direct SW Flux(ON RHO LEVELS)",
-            "shortName": "swdr",
-            "typeOfLevel": "2m above ground",
         },
         "SWDIF": {
             "name": "Diffuse SW RAD Flux(ON RHO LEVELS)",
@@ -54,6 +53,31 @@ LDAPS_GRIB = OrderedDict(
             "name": "Surface Pressure",
             "shortName": "pres",
             "typeOfLevel": "surface",
+        },
+        "VLCDC": {
+            "name": "Very Low Cloud Cover",
+            "shortName": "vlcd",
+            "typeOfLevel": "very low atmosphere",
+        },
+        "LCDC": {
+            "name": "Low Cloud Cover",
+            "shortName": "lcdc",
+            "typeOfLevel": "low atmosphere",
+        },
+        "MCDC": {
+            "name": "Medium Cloud Cover",
+            "shortName": "mcdc",
+            "typeOfLevel": "medium atmosphere",
+        },
+        "HCDC": {
+            "name": "High Cloud Cover",
+            "shortName": "hcdc",
+            "typeOfLevel": "high atmosphere",
+        },
+        "TCAM": {
+            "name": "Total Cloud Amount - Max/Rdm Overlp",
+            "shortName": "tcam",
+            "typeOfLevel": "total atmosphere",
         },
     }
 )

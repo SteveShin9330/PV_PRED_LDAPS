@@ -1,26 +1,15 @@
-import json
 
-import requests
-import numpy as np
-import arrow
-import math
 import datetime
 import pytz
 import pandas as pd
 import numpy as np
 import os
-import xarray
 from ftplib import FTP
 from retrying import retry
-from scipy.constants import convert_temperature
+from tqdm.contrib.concurrent import process_map
+
 
 from tqdm import tqdm,trange
-# from ..exceptions import (
-#     DataRootNullException,
-#     LatLonInvalidException,
-#     EccodesRuntimeErrorException,
-# )
-from common.utils import custom_round, make_dir
 from loader.ldaps_variable import LDAPS_GRIB, LDAPS_SOLAR_DEFAULT
 
 
@@ -44,7 +33,7 @@ class LDAPSLoader(object):
 
 
 
-    @retry(stop_max_attempt_number=400, wait_random_max=20)
+    @retry(stop_max_attempt_number=300, wait_random_max=100)
     def refresh_simulation_time(self) -> list:
         """__init__
         Parameters
@@ -95,10 +84,12 @@ class LDAPSLoader(object):
             print(st)
             for idx, val in enumerate(self.simulation_time):
                 print(val, dt_diff[idx])
-        idx = np.argmin(np.array(dt_diff))
-        return self.simulation_time[idx]
+        pos_idx = np.where(np.array(dt_diff) > 0)
+        idx = np.argmin(np.array(dt_diff)[pos_idx])
 
-    @retry(stop_max_attempt_number=400, wait_random_max=20)
+        return self.simulation_time[pos_idx[0][idx]]
+
+    @retry(stop_max_attempt_number=300, wait_random_max=100)
     def download_data(self, fn):
         try:
             HOST = 'ncms.kma.go.kr'
@@ -107,25 +98,31 @@ class LDAPSLoader(object):
             res = ftp.connect(HOST, PORT)
             res = ftp.login()
             res = ftp.cwd('LDPS/UNIS')
-            with open(os.open(os.path.join('/tmp', fn), os.O_CREAT | os.O_WRONLY, 0o777), "wb") as f:
+            with open(os.open(os.path.join(self.data_root, fn), os.O_CREAT | os.O_WRONLY, 0o777), "wb") as f:
                 ftp.retrbinary('RETR %s' % fn, f.write)
         finally:
             ftp.close()
         return 0
 
-    def collect_data(self, start_dt: datetime.datetime):
-        latest_simul_dt = self.latest_simulation(start_dt)
-        print(f"Latest LDAPS Simulation Datetime: {latest_simul_dt}")
+    def download_data_threaded(self, n_thread, fn_lst):
+        r = process_map(self.download_data, fn_lst, max_workers=n_thread)
+        return r
 
+    def collect_data(self, start_dt: datetime.datetime):
+        latest_simul_dt = self.latest_simulation(start_dt, verbose=True)
+        print(f"Latest LDAPS Simulation Datetime: {latest_simul_dt.strftime('%Y-%m-%d %H시')}")
         print("Download UM-LDAPS 1.5km L70 Data")
         print("====================================")
 
-
-        for hour in tqdm(range(49)):
+        fn_lst = []
+        for hour in range(49):
             simul_dt = latest_simul_dt.strftime("%Y%m%d%H")
             for grib_idx, (key, value) in enumerate(LDAPS_GRIB.items()):
                 fn = f'l015_v070_{value["shortName"]}_unis_h{hour:03d}.{simul_dt}.gb2'
-                self.download_data(fn)
+                # self.download_data(fn)
+                fn_lst.append(fn)
+        self.download_data_threaded(10, fn_lst)
+
 
 
     def __call__(self, lat, lon, fct_start_dt):
@@ -133,28 +130,32 @@ class LDAPSLoader(object):
 
         latest_simul_dt = self.latest_simulation(fct_start_dt)
 
+
         index_lst = pd.date_range(latest_simul_dt,
                                   latest_simul_dt + datetime.timedelta(hours=48),
                                   freq='h', tz='UTC')
         df = pd.DataFrame(index=index_lst)
 
-        print(f"Extracting UM-LDAPS 1.5km Data")
+        print(f"Extracting UM-LDAPS 1.5km Data {latest_simul_dt.strftime('%Y-%m-%d %H')}")
         print("====================================")
 
 
-        for grib_idx, (key, value) in tqdm(enumerate(LDAPS_GRIB.items())):
+        for grib_idx, (key, value) in enumerate(LDAPS_GRIB.items()):
             col_lst = []
-            for hour in trange(49, desc=f'{value["name"]:35}', position=0):
+            for hour in trange(49, initial=0, desc=f'{value["name"]:35}'):
                 simul_dt = latest_simul_dt.strftime("%Y%m%d%H")
 
                 fn = f'l015_v070_{value["shortName"]}_unis_h{hour:03d}.{simul_dt}.gb2'
-                # cmd = f'../kwgrib2/bin/kwgrib2 /tmp/{fn}'
+                # print(fn)
+                # cmd = f'kwgrib2 {os.path.join(self.data_root, fn)}'
                 # os.system(cmd)
-                # cmd = f'../kwgrib2/bin/kwgrib2 /tmp/{fn} -var -ftime'
+                # cmd = f'kwgrib2 {os.path.join(self.data_root, fn)} -var -ftime'
                 # os.system(cmd)
-                cmd = f'kwgrib2/bin/kwgrib2 /tmp/{fn} -lon {lon} {lat}'
+                cmd = f'./kwgrib2 {os.path.join(self.data_root, fn)} -lon {lon} {lat}'
                 data = os.popen(cmd).read()
+                # print(data)
                 data = data.split(':')[2:]
+                # print(data)
                 data[-1] = data[-1][:-1]
 
                 val = float(data[-1].split('=')[-1])
