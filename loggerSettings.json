@@ -1,0 +1,32 @@
+
+{
+    "version": 1,
+    "formatters": {
+        "basic": {
+            "format": "[%(asctime)-10s] (line: %(lineno)d) %(name)s:%(levelname)s - %(message)s"
+        }
+    },
+
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "level": "INFO",
+            "formatter": "basic",
+            "stream": "ext://sys.stdout"
+        },
+
+        "file_handler": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "level": "DEBUG",
+            "formatter": "basic",
+            "filename": "/home/linuxenerdot/Desktop/LDPS_data/info.log",
+            "maxBytes": 1048576,
+            "backupCount": 3
+        }
+    },
+
+    "root": {
+        "level": "DEBUG",
+        "handlers": ["console", "file_handler"]
+    }
+}
