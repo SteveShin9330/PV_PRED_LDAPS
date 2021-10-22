@@ -124,7 +124,7 @@ if __name__ == "__main__":
 
             # plot fcst result
             ax[idx].title.set_text(f'called @ {hour} KST / simulated @ -6 hours')
-            data[['icsr', 'ghi']].plot(ax=ax[idx])
+            data[['icsr', 'ghi']].plot(ax=ax[idx], linewidth=0.5, alpha=0.9)
             ax[idx].legend(['actual', 'fcst'])
             start_lst.append(call_df.index[0])
             end_lst.append(call_df.index[-1])

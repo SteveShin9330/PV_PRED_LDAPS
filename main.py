@@ -57,7 +57,6 @@ if __name__ == "__main__":
             dhi=weather_preproc['dhi'],
             model='perez',
             dni_extra=pvlib.irradiance.get_extra_radiation(weather_preproc.index))
-        print()
         irr_df = irr_df.resample('h', closed='right', label='right').mean()
         for col in weather_preproc:
             if col in ['ghi', 'dhi', 'dni', 'cs_ghi', 'cs_dhi', 'cs_dni']:
