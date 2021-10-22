@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import math
-import arrow
 import os
 from datetime import datetime
 

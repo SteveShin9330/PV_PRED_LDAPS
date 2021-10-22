@@ -1,27 +1,17 @@
 import datetime
-import multiprocessing
-import time
-
-import pytz
-import pandas as pd
-import numpy as np
+import glob
 import os
 from ftplib import FTP
-from retrying import retry
-import tqdm
-import parmap
-import subprocess
-
-from tqdm.contrib.concurrent import process_map, thread_map
+from functools import partial
 from multiprocessing import Manager
 
-import glob
-from itertools import repeat
-from functools import partial
+import numpy as np
+import pandas as pd
+import pytz
+from retrying import retry
+from tqdm.contrib.concurrent import process_map
 
-from tqdm import tqdm, trange
 from loader.ldaps_variable import LDAPS_GRIB, LDAPS_SOLAR_DEFAULT
-
 
 
 class LDAPSLoader(object):
@@ -98,6 +88,7 @@ class LDAPSLoader(object):
                 for idx, val in enumerate(dt_lst):
                     print(val, dt_diff[idx] / (60 * 60), 'hour')
             pos_idx = np.where(np.array(dt_diff) >= 6 * 60 * 60)
+            # pos_idx = np.where(np.array(dt_diff) >= 0)
             idx = np.argmin(np.array(dt_diff)[pos_idx])
 
             return dt_lst[pos_idx[0][idx]]

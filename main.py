@@ -1,13 +1,18 @@
-
-import pytz
 import datetime
-import pvlib
-import logging
-from logging import config
 import json
-from contextlib import redirect_stdout
+import logging
 import sys
-import os
+from contextlib import redirect_stdout
+from logging import config
+
+import pvlib
+import pytz
+
+##############################
+# 일 4회 LDAPS 산출물 다운로드
+# crontab 참고
+##############################
+
 
 if __name__ == "__main__":
     with open("/home/linuxenerdot/Desktop/LDPS_data/loggerSettings.json", "rt") as file:
@@ -59,7 +64,5 @@ if __name__ == "__main__":
                 irr_df[col] = weather_preproc[col].resample('h', closed='right', label='right').mean()
             else:
                 irr_df[col] = weather_preproc[col].resample('h').asfreq()
+
         irr_df.index = irr_df.index.tz_convert('Asia/Seoul')
-        irr_df[['ghi', 'dhi', 'dni', 'cs_ghi', 'cs_dhi', 'cs_dni']].plot()
-        import matplotlib.pyplot as plt
-        plt.show()
