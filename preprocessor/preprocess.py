@@ -277,7 +277,7 @@ class LDAPSPreprocessor(BasePreprocessor):
         if not altitude:
             query = ('https://api.open-elevation.com/api/v1/lookup'
                      f'?locations={latitude},{longitude}')
-            r = requests.get(query).json()  # json object, various ways you can extract value
+            r = requests.get(query, verify=False).json()  # json object, various ways you can extract value
             # one approach is to use pandas json functionality:
             altitude = pd.json_normalize(r, 'results')['elevation'].values[0]
             print(f'altitude not specified, replaced with NASA SRTM 7.5" data: {altitude}m')

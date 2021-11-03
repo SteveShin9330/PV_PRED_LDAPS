@@ -5,6 +5,7 @@ from ftplib import FTP
 from functools import partial
 from multiprocessing import Manager
 
+import boto3
 import numpy as np
 import pandas as pd
 import pytz
@@ -119,6 +120,9 @@ class LDAPSLoader(object):
             res = ftp.cwd('LDPS/UNIS')
             with open(os.open(os.path.join(self.data_root, fn), os.O_CREAT | os.O_WRONLY, 0o777), "wb") as f:
                 ftp.retrbinary('RETR %s' % fn, f.write)
+            s3 = boto3.resource('s3')
+            s3.meta.client.upload_file(os.path.join(self.data_root, fn), 's3.ldaps', f"{fn.split('.')[-2]}/{fn}")
+            os.remove(os.path.join(self.data_root, fn))
         finally:
             ftp.close()
         return 0
@@ -135,13 +139,13 @@ class LDAPSLoader(object):
         print("====================================")
 
         fn_lst = []
+        simul_dt = latest_simul_dt.strftime("%Y%m%d%H")
         for hour in range(49):
-            simul_dt = latest_simul_dt.strftime("%Y%m%d%H")
             for grib_idx, (key, value) in enumerate(LDAPS_GRIB.items()):
                 fn = f'l015_v070_{value["shortName"]}_unis_h{hour:03d}.{simul_dt}.gb2'
                 # self.download_data(fn)
                 fn_lst.append(fn)
-        self.download_data_threaded(10, fn_lst)
+        self.download_data_threaded(None, fn_lst)
 
     def unit_read(self, stor, cmd):
         val = os.popen(cmd).read()
@@ -149,7 +153,14 @@ class LDAPSLoader(object):
         key = str(cmd.split(' ')[1].split('/')[-1])
         stor[key] = val
 
-    def read_data_threaded(self, cmd_lst, n_thread, var, d):
+    def read_data_threaded(self, cmd_lst, n_thread, var, d, simul_dt):
+        s3_resource = boto3.resource('s3')
+        bucket = s3_resource.Bucket('s3.ldaps')
+        for obj in bucket.objects.filter(Prefix=simul_dt):
+            if not os.path.exists(os.path.join(self.data_root, os.path.dirname(obj.key))):
+                os.makedirs(os.path.join(self.data_root, os.path.dirname(obj.key)))
+            bucket.download_file(obj.key, os.path.join(self.data_root, obj.key))
+
         process_map(partial(self.unit_read, d), cmd_lst, max_workers=n_thread, desc=var)
         # parmap.map(self.unit_read, cmd_lst, d, pm_pbar=True, pm_processes=n_thread, desc=var)
         return d
@@ -172,11 +183,11 @@ class LDAPSLoader(object):
                 # for hour in trange(49, initial=0, desc=f'{value["name"]:35}'):
                 for hour in range(49):
                     simul_dt = latest_simul_dt.strftime("%Y%m%d%H")
-                    fn = f'l015_v070_{value["shortName"]}_unis_h{hour:03d}.{simul_dt}.gb2'
-                    fn_lst.append(f'./kwgrib2 {os.path.join(self.data_root, fn)} -lon {lon} {lat}')
+                    fn = f'{simul_dt}/l015_v070_{value["shortName"]}_unis_h{hour:03d}.{simul_dt}.gb2'
+                    fn_lst.append(f'/home/LDAPS/kwgrib2 {os.path.join(self.data_root, fn)} -lon {lon} {lat}')
 
                 d = m.dict({str(i.split(' ')[1].split('/')[-1]): None for i in fn_lst})
-                res = self.read_data_threaded(fn_lst, 49, f'{value["name"]:35}', d)
+                res = self.read_data_threaded(fn_lst, None, f'{value["name"]:35}', d, simul_dt)
 
         #             # print(fn)
         #             # cmd = f'kwgrib2 {os.path.join(self.data_root, fn)}'

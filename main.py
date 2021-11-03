@@ -1,3 +1,4 @@
+
 import datetime
 import json
 import logging
@@ -14,8 +15,9 @@ import pytz
 ##############################
 
 
+
 if __name__ == "__main__":
-    with open("/home/linuxenerdot/Desktop/LDPS_data/loggerSettings.json", "rt") as file:
+    with open("/home/LDAPS/loggerSettings.json", "rt") as file:
         config = json.load(file)
 
     logging.config.dictConfig(config)
@@ -34,7 +36,7 @@ if __name__ == "__main__":
         # end_dt = kst.localize(dt + datetime.timedelta(days=1))  # Change datetime you want
         lat, lon = 35.944350, 126.546989
 
-        loader = LDAPSLoader(data_root="/home/linuxenerdot/Desktop/LDPS_data/data")
+        loader = LDAPSLoader(data_root="/home/LDAPS/data")
         loader.collect_data(start_dt)
         df = loader(lat, lon, start_dt)
 
@@ -57,6 +59,7 @@ if __name__ == "__main__":
             dhi=weather_preproc['dhi'],
             model='perez',
             dni_extra=pvlib.irradiance.get_extra_radiation(weather_preproc.index))
+        print()
         irr_df = irr_df.resample('h', closed='right', label='right').mean()
         for col in weather_preproc:
             if col in ['ghi', 'dhi', 'dni', 'cs_ghi', 'cs_dhi', 'cs_dni']:
@@ -65,3 +68,4 @@ if __name__ == "__main__":
                 irr_df[col] = weather_preproc[col].resample('h').asfreq()
 
         irr_df.index = irr_df.index.tz_convert('Asia/Seoul')
+

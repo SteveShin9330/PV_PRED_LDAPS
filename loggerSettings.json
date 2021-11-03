@@ -19,14 +19,17 @@
             "class": "logging.handlers.RotatingFileHandler",
             "level": "DEBUG",
             "formatter": "basic",
-            "filename": "/home/linuxenerdot/Desktop/LDPS_data/info.log",
+            "filename": "/home/LDAPS/info.log",
             "maxBytes": 1048576,
             "backupCount": 3
         }
     },
 
     "root": {
-        "level": "DEBUG",
-        "handlers": ["console", "file_handler"]
+        "level": "INFO",
+        "handlers": [
+            "console",
+            "file_handler"
+        ]
     }
 }
