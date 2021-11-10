@@ -6,6 +6,7 @@ from functools import partial
 from multiprocessing import Manager
 
 import boto3
+import botocore
 import numpy as np
 import pandas as pd
 import pytz
@@ -154,12 +155,15 @@ class LDAPSLoader(object):
         stor[key] = val
 
     def read_data_threaded(self, cmd_lst, n_thread, var, d, simul_dt):
-        s3_resource = boto3.resource('s3')
+        cfg = botocore.client.Config(max_pool_connections=os.cpu_count() * 5)
+        s3_resource = boto3.resource('s3', config=cfg)
         bucket = s3_resource.Bucket('s3.ldaps')
         for obj in bucket.objects.filter(Prefix=simul_dt):
             if not os.path.exists(os.path.join(self.data_root, os.path.dirname(obj.key))):
                 os.makedirs(os.path.join(self.data_root, os.path.dirname(obj.key)))
-            bucket.download_file(obj.key, os.path.join(self.data_root, obj.key))
+            if not os.path.isfile(os.path.join(self.data_root, obj.key)) and obj.size != os.path.getsize(
+                    os.path.join(self.data_root, obj.key)):
+                bucket.download_file(obj.key, os.path.join(self.data_root, obj.key))
 
         process_map(partial(self.unit_read, d), cmd_lst, max_workers=n_thread, desc=var)
         # parmap.map(self.unit_read, cmd_lst, d, pm_pbar=True, pm_processes=n_thread, desc=var)
