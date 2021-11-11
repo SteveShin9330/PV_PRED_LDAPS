@@ -1,5 +1,4 @@
 import datetime
-import glob
 import os
 from ftplib import FTP
 from functools import partial
@@ -80,10 +79,17 @@ class LDAPSLoader(object):
     ) -> datetime.datetime:
         st = fct_start_dt.astimezone(pytz.timezone("UTC"))
         if use_local_latest:
-            fn_lst = list(set([path.split('.')[-2] + 'UTC' for path in glob.glob(f"{self.data_root}/*")]))
+            client = boto3.client('s3')
+            fn_lst = client.list_objects(Bucket='s3.ldaps', Delimiter='/').get('CommonPrefixes')
+            fn_lst = [val['Prefix'].split('/')[0] + 'UTC' for val in fn_lst]
             fn_lst.sort()
             dt_lst = [pytz.utc.localize(datetime.datetime.strptime(fn, '%Y%m%d%H%Z')) for fn in fn_lst]
             dt_diff = [(st - dt).total_seconds() for dt in dt_lst]
+
+            # fn_lst = list(set([path.split('.')[-2] + 'UTC' for path in glob.glob(f"{self.data_root}/*")]))
+            # fn_lst.sort()
+            # dt_lst = [pytz.utc.localize(datetime.datetime.strptime(fn, '%Y%m%d%H%Z')) for fn in fn_lst]
+            # dt_diff = [(st - dt).total_seconds() for dt in dt_lst]
 
             if verbose:
                 print(st)
@@ -161,7 +167,7 @@ class LDAPSLoader(object):
         for obj in bucket.objects.filter(Prefix=simul_dt):
             if not os.path.exists(os.path.join(self.data_root, os.path.dirname(obj.key))):
                 os.makedirs(os.path.join(self.data_root, os.path.dirname(obj.key)))
-            if not os.path.isfile(os.path.join(self.data_root, obj.key)) and obj.size != os.path.getsize(
+            if not os.path.isfile(os.path.join(self.data_root, obj.key)) or obj.size != os.path.getsize(
                     os.path.join(self.data_root, obj.key)):
                 bucket.download_file(obj.key, os.path.join(self.data_root, obj.key))
 

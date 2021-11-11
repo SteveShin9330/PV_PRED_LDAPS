@@ -58,7 +58,7 @@ if __name__ == "__main__":
             # start_dt = kst.localize(dt)  # Change datetime you want
 
             try:
-                loader = LDAPSLoader(data_root="/home/linuxenerdot/Desktop/LDPS_data/data")
+                loader = LDAPSLoader(data_root="/home/LDAPS/data")
                 # loader.collect_data(start_dt)
                 df = loader(lat, lon, start_dt, use_local_latest=True,
                             exclude_col=['SWDIF', 'VLCDC', 'LCDC', 'MCDC', 'HCDC', 'TCAM'])
@@ -115,7 +115,7 @@ if __name__ == "__main__":
         asostest.index = asostest.index.tz_localize('Asia/Seoul')
         start_lst = [asostest.index[0]]
         end_lst = [asostest.index[-1]]
-        fig, ax = plt.subplots(4, 1, figsize=(12, 15))
+        fig, ax = plt.subplots(4, 1, figsize=(17, 15))
         for idx, (hour, call_df) in enumerate(fcst_df.groupby(fcst_df.index.get_level_values('call').hour)):
             call_df.index = call_df.index.droplevel('call')
             call_df.index = call_df.index.tz_convert('Asia/Seoul')
