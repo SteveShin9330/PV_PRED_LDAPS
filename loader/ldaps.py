@@ -197,7 +197,7 @@ class LDAPSLoader(object):
                     fn_lst.append(f'/home/LDAPS/kwgrib2 {os.path.join(self.data_root, fn)} -lon {lon} {lat}')
 
                 d = m.dict({str(i.split(' ')[1].split('/')[-1]): None for i in fn_lst})
-                res = self.read_data_threaded(fn_lst, None, f'{value["name"]:35}', d, simul_dt)
+                res = self.read_data_threaded(fn_lst, 49, f'{value["name"]:35}', d, simul_dt)
 
         #             # print(fn)
         #             # cmd = f'kwgrib2 {os.path.join(self.data_root, fn)}'

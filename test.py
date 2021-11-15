@@ -6,12 +6,14 @@ from loader.ldaps import LDAPSLoader
 from preprocessor.preprocess import LDAPSPreprocessor
 from functools import reduce
 import requests
+from retrying import retry
 
 
 #############################
 # LDAPS 모델 일사량 정확도 비교 코드
 ############################
 
+@retry(stop_max_attempt_number=30, wait_random_max=1000)
 def getKmaAsosWeather(start, end, stdId):
     key = 'x17Q2WlJi5iGJTaZmcWPiOkETcrPKMA0ivHmSSlbN2y1zaPrNWMtyd1vb236WBEyce0gKtNiF4HfqCFElrVRNQ%3D%3D'
     url = 'http://apis.data.go.kr/1360000/AsosHourlyInfoService/getWthrDataList'
@@ -36,9 +38,10 @@ def getKmaAsosWeather(start, end, stdId):
         return df
 
 
-
 if __name__ == "__main__":
 
+    now = pd.Timestamp.now()
+    today_date = pd.Timestamp.today().date()
     asos = pd.read_csv("ASOS.csv", index_col=0)
     for idx, row in asos.iterrows():
         lat = row['위도']
@@ -46,7 +49,7 @@ if __name__ == "__main__":
         alt = row['노장해발고도(m)']
         asos_id = idx
 
-        time_range = pd.date_range(start='20211012 0300', end=pd.Timestamp.now(), tz='Asia/Seoul', freq='6h',
+        time_range = pd.date_range(start='20211013 0300', end=now, tz='Asia/Seoul', freq='6h',
                                    closed='left')
         lst = []
         # for targ in pd.date_range(start=asos.index[0]+pd.to_timedelta('3h'), end=asos.index[-1], freq='6h'):
@@ -108,7 +111,7 @@ if __name__ == "__main__":
 
         fcst_df = reduce(lambda x, y: x.append(y), lst)
         asostest = getKmaAsosWeather(fcst_df.index.get_level_values('dt').min().strftime('%Y%m%d%H%M%S'),
-                                     (pd.Timestamp.today().date() - pd.to_timedelta('1d')).strftime('%Y%m%d%H%M%S'),
+                                     (today_date - pd.to_timedelta('1d')).strftime('%Y%m%d%H%M%S'),
                                      asos_id)
 
         asostest.set_index('tm', inplace=True, drop=True)
