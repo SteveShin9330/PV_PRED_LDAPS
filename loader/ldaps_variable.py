@@ -6,7 +6,6 @@ LDAPS_SOLAR_DEFAULT = {
     "TDSWS": 'ghi',
     "SWDIF": 'dhi',
     "TMP": 'temp_air',
-    "RH": 'relative_humidity',
     "UGRD": 'wind_speed_u',
     "VGRD": 'wind_speed_v',
     "DPT": 'temp_dew',
@@ -33,11 +32,6 @@ LDAPS_GRIB = OrderedDict(
         "TMP": {
             "name": "Temperature",
             "shortName": "tmps",
-            "typeOfLevel": "surface",
-        },
-        "RH": {
-            "name": "Relative Humidity",
-            "shortName": "rhwt",
             "typeOfLevel": "surface",
         },
         "UGRD": {
