@@ -1,4 +1,3 @@
-
 import datetime
 import json
 import logging
@@ -8,11 +7,12 @@ from logging import config
 
 import pytz
 
+from dbIntegration.dbUplaodPlantFcst import updateDB, getTargPlant
+
 ##############################
 # 일 4회 LDAPS 산출물 다운로드
 # crontab 참고
 ##############################
-
 
 
 if __name__ == "__main__":
@@ -32,11 +32,20 @@ if __name__ == "__main__":
         dt = datetime.datetime.now()  # Change datetime you want
         start_dt = kst.localize(dt)  # Change datetime you want
         # end_dt = kst.localize(dt + datetime.timedelta(days=1))  # Change datetime you want
-        lat, lon = 35.944350, 126.546989
 
         loader = LDAPSLoader(data_root="/home/LDAPS/data")
-        loader.collect_data(start_dt)
-        # df = loader(lat, lon, start_dt)
+        latest_simul_dt = loader.collect_data(start_dt)
+
+        targ_plant = getTargPlant(['LDS', 'razzler'])
+        for idx, row in targ_plant.iterrows():
+            df = loader(row.latitude, row.longitude, start_dt)
+            df['plant_id'] = row.plant_id
+            df['ctime'] = df.index.tz_convert(pytz.timezone('Asia/Seoul')).strftime('%H:%M:%S')
+            df['cdate'] = df.index.tz_convert(pytz.timezone('Asia/Seoul')).strftime('%Y-%m-%d')
+            df['base_time'] = (latest_simul_dt + datetime.timedelta(hours=6)).astimezone(
+                pytz.timezone('Asia/Seoul')).strftime('%H:%M:%S')
+            updateDB(df)
+        loader.clean()
         #
         #
         # preproc_model = LDAPSPreprocessor(decomp_model='dirint', clearsky_interpolate=True)
