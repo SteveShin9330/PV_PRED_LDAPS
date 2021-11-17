@@ -1,5 +1,6 @@
 import datetime
 import os
+import shutil
 from ftplib import FTP
 from functools import partial
 from multiprocessing import Manager
@@ -32,6 +33,10 @@ class LDAPSLoader(object):
         self.PORT = 10021
         self.col_mapping = list(LDAPS_GRIB.keys())
         self.simulation_time = None
+
+    def clean(self):
+        shutil.rmtree('data')
+        os.mkdir('data')
 
     @retry(stop_max_attempt_number=300, wait_random_max=100)
     def refresh_simulation_time(self) -> list:
@@ -153,6 +158,7 @@ class LDAPSLoader(object):
                 # self.download_data(fn)
                 fn_lst.append(fn)
         self.download_data_threaded(None, fn_lst)
+        return latest_simul_dt
 
     def unit_read(self, stor, cmd):
         val = os.popen(cmd).read()
@@ -171,7 +177,7 @@ class LDAPSLoader(object):
                     os.path.join(self.data_root, obj.key)):
                 bucket.download_file(obj.key, os.path.join(self.data_root, obj.key))
 
-        process_map(partial(self.unit_read, d), cmd_lst, max_workers=n_thread, desc=var)
+        process_map(partial(self.unit_read, d), cmd_lst, max_workers=n_thread)
         # parmap.map(self.unit_read, cmd_lst, d, pm_pbar=True, pm_processes=n_thread, desc=var)
         return d
 
@@ -187,17 +193,17 @@ class LDAPSLoader(object):
             f"Extracting UM-LDAPS 1.5km Data {latest_simul_dt.astimezone(pytz.timezone('Asia/Seoul')).strftime('%Y-%m-%d %H시 %Z')}")
         print("====================================")
 
+        fn_lst = []
         for grib_idx, (key, value) in enumerate(LDAPS_GRIB.items()):
             if key not in exclude_col:
-                fn_lst = []
                 # for hour in trange(49, initial=0, desc=f'{value["name"]:35}'):
                 for hour in range(49):
                     simul_dt = latest_simul_dt.strftime("%Y%m%d%H")
                     fn = f'{simul_dt}/l015_v070_{value["shortName"]}_unis_h{hour:03d}.{simul_dt}.gb2'
                     fn_lst.append(f'/home/LDAPS/kwgrib2 {os.path.join(self.data_root, fn)} -lon {lon} {lat}')
 
-                d = m.dict({str(i.split(' ')[1].split('/')[-1]): None for i in fn_lst})
-                res = self.read_data_threaded(fn_lst, 49, f'{value["name"]:35}', d, simul_dt)
+        d = m.dict({str(i.split(' ')[1].split('/')[-1]): None for i in fn_lst})
+        res = self.read_data_threaded(fn_lst, 50, None, d, simul_dt)
 
         #             # print(fn)
         #             # cmd = f'kwgrib2 {os.path.join(self.data_root, fn)}'
@@ -215,9 +221,13 @@ class LDAPSLoader(object):
         #             col_lst.append(val)
         #
         #     df[key] = col_lst
-            df[key] = res.values()
+        #     df[key] = res.values()
+        for key, val in res.items():
+            var_name = key.split('_')[2]
+            hrs = key.split('_')[-1].split('.')[0][1:]
+            df.loc[latest_simul_dt + datetime.timedelta(hours=int(hrs)), var_name] = val
+        df.columns = LDAPS_SOLAR_DEFAULT.values()
         df.index.name = 'dt'
-        df.columns = df.columns.map(LDAPS_SOLAR_DEFAULT)
 
         return df
         #
