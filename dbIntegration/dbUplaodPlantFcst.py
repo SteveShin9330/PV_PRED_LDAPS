@@ -15,6 +15,7 @@ def updateDB(df):
         lst.extend(list(LDAPS_SOLAR_DEFAULT.values()))
         lst.extend(['base_time'])
         df = df[lst]
+        df['reg_time'] = pd.Timestamp.now('Asia/Seoul').strftime('%Y-%m-%d %H:%M:%S')
         with sshtunnel.SSHTunnelForwarder(
                 ('52.78.50.187', 22),
                 ssh_username='ec2-user',
@@ -30,7 +31,7 @@ def updateDB(df):
             cursor = conn.cursor()
             columns = reduce(lambda x, y: x + ',' + y, df.columns)
             cursor.executemany(
-                f'REPLACE INTO gu_research_plant_fcst({columns}) values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+                f'REPLACE INTO gu_research_plant_fcst({columns}) values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
                 df.values.tolist())
             conn.commit()
     except Error as e:
