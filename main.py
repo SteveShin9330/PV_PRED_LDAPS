@@ -42,8 +42,7 @@ if __name__ == "__main__":
             df['plant_id'] = row.plant_id
             df['ctime'] = df.index.tz_convert(pytz.timezone('Asia/Seoul')).strftime('%H:%M:%S')
             df['cdate'] = df.index.tz_convert(pytz.timezone('Asia/Seoul')).strftime('%Y-%m-%d')
-            df['base_time'] = (latest_simul_dt + datetime.timedelta(hours=6)).astimezone(
-                pytz.timezone('Asia/Seoul')).strftime('%H:%M:%S')
+            df['base_time'] = (latest_simul_dt).astimezone(pytz.timezone('Asia/Seoul')).strftime('%Y-%m-%d %H:%M:%S')
             updateDB(df)
         loader.clean()
         #

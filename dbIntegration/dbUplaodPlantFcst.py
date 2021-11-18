@@ -18,7 +18,7 @@ def updateDB(df):
         with sshtunnel.SSHTunnelForwarder(
                 ('52.78.50.187', 22),
                 ssh_username='ec2-user',
-                ssh_private_key="custom_vpc.pem",
+                ssh_private_key="/home/LDAPS/custom_vpc.pem",
                 remote_bind_address=('redi.cv32wpb0ygub.ap-northeast-2.rds.amazonaws.com', 3306)) as server:
             conn = pymysql.connect(
                 host='127.0.0.1',
@@ -47,7 +47,7 @@ def getTargPlant(company_lst):
         with sshtunnel.SSHTunnelForwarder(
                 ('52.78.50.187', 22),
                 ssh_username='ec2-user',
-                ssh_private_key="custom_vpc.pem",
+                ssh_private_key="/home/LDAPS/custom_vpc.pem",
                 remote_bind_address=('redi.cv32wpb0ygub.ap-northeast-2.rds.amazonaws.com', 3306)) as server:
             conn = sqlalchemy.create_engine(
                 'mysql://{0}:{1}@{2}:{3}'.format('redi', 'redi2019!!', '127.0.0.1', server.local_bind_port))
