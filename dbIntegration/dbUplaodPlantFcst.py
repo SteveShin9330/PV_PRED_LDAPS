@@ -57,4 +57,6 @@ def getTargPlant(company_lst):
 
     except Error as e:
         print(e)
+    finally:
+        conn.dispose()
     return df

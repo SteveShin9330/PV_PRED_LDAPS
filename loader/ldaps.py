@@ -78,14 +78,14 @@ class LDAPSLoader(object):
     def latest_simulation(
             self,
             fct_start_dt: datetime.datetime,
-            use_local_latest=False,
+            use_local_latest=True,
             refresh=False,
             verbose=False
     ) -> datetime.datetime:
         st = fct_start_dt.astimezone(pytz.timezone("UTC"))
         if use_local_latest:
             client = boto3.client('s3')
-            fn_lst = client.list_objects(Bucket='s3.ldaps', Delimiter='/').get('CommonPrefixes')
+            fn_lst = client.list_objects(Bucket='s3.ldaps', Delimiter='/').get('CommonPrefixes')[1:]
             fn_lst = [val['Prefix'].split('/')[0] + 'UTC' for val in fn_lst]
             fn_lst.sort()
             dt_lst = [pytz.utc.localize(datetime.datetime.strptime(fn, '%Y%m%d%H%Z')) for fn in fn_lst]
@@ -123,20 +123,8 @@ class LDAPSLoader(object):
 
     @retry(stop_max_attempt_number=300, wait_random_max=100)
     def download_data(self, fn):
-        try:
-            HOST = 'ncms.kma.go.kr'
-            PORT = 10021
-            ftp = FTP()
-            res = ftp.connect(HOST, PORT)
-            res = ftp.login()
-            res = ftp.cwd('LDPS/UNIS')
-            with open(os.open(os.path.join(self.data_root, fn), os.O_CREAT | os.O_WRONLY, 0o777), "wb") as f:
-                ftp.retrbinary('RETR %s' % fn, f.write)
-            s3 = boto3.resource('s3')
-            s3.meta.client.upload_file(os.path.join(self.data_root, fn), 's3.ldaps', f"{fn.split('.')[-2]}/{fn}")
-            os.remove(os.path.join(self.data_root, fn))
-        finally:
-            ftp.close()
+        s3 = boto3.resource('s3')
+        s3.meta.client.download_file('s3.ldaps', fn, os.path.join(self.data_root, fn))
         return 0
 
     def download_data_threaded(self, n_thread, fn_lst):
@@ -152,11 +140,12 @@ class LDAPSLoader(object):
 
         fn_lst = []
         simul_dt = latest_simul_dt.strftime("%Y%m%d%H")
-        for hour in range(49):
-            for grib_idx, (key, value) in enumerate(LDAPS_GRIB.items()):
-                fn = f'l015_v070_{value["shortName"]}_unis_h{hour:03d}.{simul_dt}.gb2'
-                # self.download_data(fn)
-                fn_lst.append(fn)
+        s3_resource = boto3.resource('s3')
+        bucket = s3_resource.Bucket('s3.ldaps')
+        for obj in bucket.objects.filter(Prefix=f'{simul_dt}/'):
+            if not os.path.exists(os.path.join(self.data_root, os.path.dirname(obj.key))):
+                os.makedirs(os.path.join(self.data_root, os.path.dirname(obj.key)))
+            fn_lst.append(obj.key)
         self.download_data_threaded(None, fn_lst)
         return latest_simul_dt
 
@@ -181,7 +170,7 @@ class LDAPSLoader(object):
         # parmap.map(self.unit_read, cmd_lst, d, pm_pbar=True, pm_processes=n_thread, desc=var)
         return d
 
-    def __call__(self, lat, lon, fct_start_dt, use_local_latest=False, exclude_col=[]):
+    def __call__(self, lat, lon, fct_start_dt, use_local_latest=True, exclude_col=[]):
         m = Manager()
 
         latest_simul_dt = self.latest_simulation(fct_start_dt, use_local_latest)
