@@ -17,7 +17,7 @@ class syncfs(object):
     FTP_PASSWORD = "Anonymous@"
     vars = [val['shortName'] for val in LDAPS_GRIB.values()]
 
-    @retry(stop_max_attempt_number=20, wait_random_max=100)
+    @retry(stop_max_attempt_number=50, wait_random_max=100)
     def fn_lst(self):
         try:
             ftp = FTP()
@@ -30,7 +30,7 @@ class syncfs(object):
             ftp.close()
         return res
 
-    @retry(stop_max_attempt_number=20, wait_random_max=100)
+    @retry(stop_max_attempt_number=50, wait_random_max=500)
     def download_data(self, fn):
         s3 = boto3.client("s3")
         ftp = FTP()

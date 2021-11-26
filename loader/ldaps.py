@@ -1,4 +1,5 @@
 import datetime
+import glob
 import os
 import shutil
 from ftplib import FTP
@@ -6,7 +7,6 @@ from functools import partial
 from multiprocessing import Manager
 
 import boto3
-import botocore
 import numpy as np
 import pandas as pd
 import pytz
@@ -35,8 +35,8 @@ class LDAPSLoader(object):
         self.simulation_time = None
 
     def clean(self):
-        shutil.rmtree('data')
-        os.mkdir('data')
+        shutil.rmtree(self.data_root)
+        os.mkdir(self.data_root)
 
     @retry(stop_max_attempt_number=300, wait_random_max=100)
     def refresh_simulation_time(self) -> list:
@@ -100,7 +100,7 @@ class LDAPSLoader(object):
                 print(st)
                 for idx, val in enumerate(dt_lst):
                     print(val, dt_diff[idx] / (60 * 60), 'hour')
-            pos_idx = np.where(np.array(dt_diff) >= 6 * 60 * 60)
+            pos_idx = np.where(np.array(dt_diff) >= 5 * 60 * 60)
             # pos_idx = np.where(np.array(dt_diff) >= 0)
             idx = np.argmin(np.array(dt_diff)[pos_idx])
 
@@ -156,15 +156,15 @@ class LDAPSLoader(object):
         stor[key] = val
 
     def read_data_threaded(self, cmd_lst, n_thread, var, d, simul_dt):
-        cfg = botocore.client.Config(max_pool_connections=os.cpu_count() * 5)
-        s3_resource = boto3.resource('s3', config=cfg)
-        bucket = s3_resource.Bucket('s3.ldaps')
-        for obj in bucket.objects.filter(Prefix=simul_dt):
-            if not os.path.exists(os.path.join(self.data_root, os.path.dirname(obj.key))):
-                os.makedirs(os.path.join(self.data_root, os.path.dirname(obj.key)))
-            if not os.path.isfile(os.path.join(self.data_root, obj.key)) or obj.size != os.path.getsize(
-                    os.path.join(self.data_root, obj.key)):
-                bucket.download_file(obj.key, os.path.join(self.data_root, obj.key))
+        # cfg = botocore.client.Config(max_pool_connections=os.cpu_count() * 5)
+        # s3_resource = boto3.resource('s3', config=cfg)
+        # bucket = s3_resource.Bucket('s3.ldaps')
+        # for obj in bucket.objects.filter(Prefix=simul_dt):
+        #     if not os.path.exists(os.path.join(self.data_root, os.path.dirname(obj.key))):
+        #         os.makedirs(os.path.join(self.data_root, os.path.dirname(obj.key)))
+        #     if not os.path.isfile(os.path.join(self.data_root, obj.key)) or obj.size != os.path.getsize(
+        #             os.path.join(self.data_root, obj.key)):
+        #         bucket.download_file(obj.key, os.path.join(self.data_root, obj.key))
 
         process_map(partial(self.unit_read, d), cmd_lst, max_workers=n_thread)
         # parmap.map(self.unit_read, cmd_lst, d, pm_pbar=True, pm_processes=n_thread, desc=var)
@@ -185,14 +185,16 @@ class LDAPSLoader(object):
         fn_lst = []
         for grib_idx, (key, value) in enumerate(LDAPS_GRIB.items()):
             if key not in exclude_col:
-                # for hour in trange(49, initial=0, desc=f'{value["name"]:35}'):
-                for hour in range(49):
-                    simul_dt = latest_simul_dt.strftime("%Y%m%d%H")
-                    fn = f'{simul_dt}/l015_v070_{value["shortName"]}_unis_h{hour:03d}.{simul_dt}.gb2'
-                    fn_lst.append(f'/home/LDAPS/kwgrib2 {os.path.join(self.data_root, fn)} -lon {lon} {lat}')
+                simul_dt = latest_simul_dt.strftime("%Y%m%d%H")
+                fn = glob.glob(os.path.join(self.data_root, f'{simul_dt}/l015_v070_{value["shortName"]}_*.gb2'))
+                fn_lst.extend([f'/home/LDAPS/kwgrib2 {i} -lon {lon} {lat}' for i in fn])
+                # for hour in range(49):
+                #     simul_dt = latest_simul_dt.strftime("%Y%m%d%H")
+                #     fn = f'{simul_dt}/l015_v070_{value["shortName"]}_unis_h{hour:03d}.{simul_dt}.gb2'
+                #     fn_lst.append(f'/home/LDAPS/kwgrib2 {os.path.join(self.data_root, fn)} -lon {lon} {lat}')
 
         d = m.dict({str(i.split(' ')[1].split('/')[-1]): None for i in fn_lst})
-        res = self.read_data_threaded(fn_lst, 50, None, d, simul_dt)
+        res = self.read_data_threaded(fn_lst, None, None, d, simul_dt)
 
         #             # print(fn)
         #             # cmd = f'kwgrib2 {os.path.join(self.data_root, fn)}'
@@ -217,7 +219,7 @@ class LDAPSLoader(object):
             df.loc[latest_simul_dt + datetime.timedelta(hours=int(hrs)), var_name] = val
         df.columns = LDAPS_SOLAR_DEFAULT.values()
         df.index.name = 'dt'
-
+        df.dropna(inplace=True)
         return df
         #
         # #
