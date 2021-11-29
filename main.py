@@ -39,7 +39,7 @@ if __name__ == "__main__":
         targ_plant = getTargPlant(['LDS', 'razzler'])
         for idx, row in targ_plant.iterrows():
             df = loader(row.latitude, row.longitude, start_dt)
-            print(df)
+            # print(df)
             df['plant_id'] = row.plant_id
             df['ctime'] = df.index.tz_convert(pytz.timezone('Asia/Seoul')).strftime('%H:%M:%S')
             df['cdate'] = df.index.tz_convert(pytz.timezone('Asia/Seoul')).strftime('%Y-%m-%d')
